@@ -1,0 +1,97 @@
+---
+title: "HAR_report"
+author: "Mendelevium"
+date: "Friday, March 13, 2015"
+output:
+  html_document:
+    keep_md: yes
+---
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+## Setup
+Load package and set data path.
+```{r, cache = T}
+library(caret)
+library(randomForest)
+library(e1071)
+
+## variables
+trainFile <- "./data/ML/pml-training.csv"
+testFile <- "./data/ML/pml-testing.csv"
+```
+
+## Load data 
+Bad entries are also replaced  with "na".
+```{r}
+if (!exists("trainData")) {
+    trainData <- read.csv(trainFile, header=TRUE, na.strings=c("NA","NaN", " ",""))
+}
+if (!exists("testData")) {
+    testData <- read.csv(testFile, header=TRUE, na.strings=c("NA","NaN", " ",""))
+}
+```
+The training set contains 19622 rows and 160 columns. 
+The testing set contains 20 rows and 160 columns. 
+The "classe" variable in the training set is the outcome to predict.
+
+## Clean data 
+Keep only relevant columns (NAs, timestamp and window columns removed).
+```{r}
+keeps <- colSums(is.na(trainData)) == 0
+newTrain <- trainData[keeps]
+newTest <- testData[keeps]
+
+removes <- grep("timestamp|window", names(newTrain))
+newTrain <- newTrain[-removes]
+newTest <- newTest[-removes]
+```
+After cleaning:
+The new training set contains 19622 rows and 55 columns. 
+The new testing set contains 20 rows and 55 columns. 
+
+## Data partition
+Create a data partition: 75% will be use for training and 25% for pre-testing.
+```{r}
+set.seed(123)
+inTrain <- createDataPartition(y=newTrain$classe, p=0.75, list=FALSE)
+train <- newTrain[inTrain, ]
+preTest <- newTrain[-inTrain, ]
+```
+
+## Cross validation
+A 7-fold cross validation is performed to minimize variance and bias.
+```{r}
+control <- trainControl(method="cv", 7)
+```
+
+## Trainning
+A random forest algorithm is selected for its classification and regression capabilities. The number of trees is limited to 100 in order to reduce the computing time required since RF is not the most efficient method.
+```{r}
+fit <- train(classe ~ . - X, data=train, method="rf", trControl=control, ntree=100)
+fit
+```
+
+## Prediction on pre-test set
+```{r}
+predTest <- predict(fit, newdata = preTest)
+confmat <- confusionMatrix(preTest$classe, predTest)
+confmat
+```
+The estimated accuracy of the model is 99.39% and the error is 0.61%.
+
+## Prediction on test set
+```{r}
+pred <- predict(fit, newdata = newTest)
+pred
+```
